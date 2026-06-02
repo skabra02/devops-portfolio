@@ -1,0 +1,42 @@
+name: CI Pipeline
+
+# Trigger — run on every push to main branch
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-and-test:
+    # GitHub provides this machine for free
+    runs-on: ubuntu-latest
+
+    steps:
+      # Step 1 — get your code onto the machine
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Step 2 — install Python
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      # Step 3 — install your app dependencies
+      - name: Install dependencies
+        run: |
+          python -m venv .venv
+          source .venv/bin/activate
+          pip install -r requirements.txt
+
+      # Step 4 — run your tests
+      # If any test fails, pipeline stops here with a red cross
+      - name: Run tests
+        run: |
+          source .venv/bin/activate
+          python -m pytest tests/ -v
+
+      # Step 5 — build Docker image to confirm Dockerfile works
+      - name: Build Docker image
+        run: docker build -t devops-portfolio:${{ github.sha }} .
