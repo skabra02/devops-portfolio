@@ -1,4 +1,4 @@
-name: CI Pipeline
+name: CI/CD Pipeline
 
 on:
   push:
@@ -7,10 +7,10 @@ on:
     branches: [ main ]
 
 jobs:
-  build-and-test:
+  # ── Job 1: Test ──────────────────────────────
+  test:
     runs-on: ubuntu-latest
 
-    # Spin up a PostgreSQL container for tests
     services:
       postgres:
         image: postgres:15
@@ -52,5 +52,70 @@ jobs:
           source .venv/bin/activate
           python -m pytest tests/ -v
 
-      - name: Build Docker image
-        run: docker build -t devops-portfolio:${{ github.sha }} .
+  # ── Job 2: Build and push Docker image ───────
+  build:
+    runs-on: ubuntu-latest
+    needs: test          # only runs if test job passed
+
+    # Only build on push to main, not on PRs
+    if: github.event_name == 'push'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Log in to DockerHub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/devops-portfolio:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/devops-portfolio:${{ github.sha }}
+
+  # ── Job 3: Deploy to server ───────────────────
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build         # only runs if build job passed
+
+    if: github.event_name == 'push'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy to server via SSH
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.SERVER_IP }}
+          username: ubuntu
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          script: |
+            # Pull latest image
+            docker pull ${{ secrets.DOCKERHUB_USERNAME }}/devops-portfolio:latest
+
+            # Stop existing container if running
+            docker stop devops-app 2>/dev/null || true
+            docker rm devops-app 2>/dev/null || true
+
+            # Start new container
+            docker run -d \
+              --name devops-app \
+              --restart unless-stopped \
+              -p 80:5000 \
+              -e DB_HOST=${{ secrets.DB_HOST }} \
+              -e DB_PORT=5432 \
+              -e DB_NAME=tasksdb \
+              -e DB_USER=postgres \
+              -e DB_PASSWORD=${{ secrets.DB_PASSWORD }} \
+              ${{ secrets.DOCKERHUB_USERNAME }}/devops-portfolio:latest
+
+            # Verify it started
+            sleep 5
+            docker ps | grep devops-app
