@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+data:
+  DB_HOST: "172.31.36.209"
+  DB_PORT: "5432"
+  DB_NAME: "tasksdb"
+  DB_USER: "postgres"
