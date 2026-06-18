@@ -33,6 +33,13 @@ resource "aws_security_group" "app_sg" {
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
+  
+  ingress {
+    from_port   = 30080
+    to_port     = 30080
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+ } 
 
   # Allow SSH from anywhere (restrict to your IP in production)
   ingress {
@@ -58,7 +65,7 @@ resource "aws_security_group" "app_sg" {
 # EC2 instance — the actual server
 resource "aws_instance" "app_server" {
   ami           = "ami-0209ee5cb40d1c54b"  # Ubuntu 22.04 in us-east-2
-  instance_type = "t3.micro"               # free tier eligible
+  instance_type = "t3.small"               # free tier eligible
 
   vpc_security_group_ids = [aws_security_group.app_sg.id]
   key_name               = aws_key_pair.deployer.key_name
